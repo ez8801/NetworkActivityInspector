@@ -9,7 +9,7 @@ To install this package, you need to edit your Unity project's `Packages/manifes
 ``` json
 {
   "dependencies": {
-    "com.foobar.package": "https://github.com/foo/bar",
+    "com.ez.network-activity-inspector": "https://github.com/ez8801/NetworkActivityInspector",
   }
 }
 ```
