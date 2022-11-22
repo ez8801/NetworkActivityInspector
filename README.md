@@ -1,5 +1,5 @@
-# UnityPackageTemplate
-This is a template for unity custom package.
+# Network Activity Inspector
+This is a network activity inspector for Unity.
 
 ## Installation
 
@@ -12,4 +12,11 @@ To install this package, you need to edit your Unity project's `Packages/manifes
     "com.ez.network-activity-inspector": "https://github.com/ez8801/NetworkActivityInspector",
   }
 }
+```
+
+## Usage
+
+```CSharp
+var operation = req.SendWebRequest();
+await EZ.Network.NetworkActivity.OnRequest(operation, request.Param);
 ```
