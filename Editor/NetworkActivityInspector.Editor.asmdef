@@ -1,0 +1,16 @@
+{
+    "name": "NetworkActivityInspector.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:6ed9fc0c14b66734da2f55162c1beb32"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

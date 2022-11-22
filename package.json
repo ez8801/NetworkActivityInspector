@@ -1,24 +1,9 @@
 {
-  "name": "packageName",
-  "version": "packageVersion",
-  "displayName": "Display Name",
-  "description": "Description",
-  "unity": "2021.3",
-  "unityRelease": "10f1",
-  "documentationUrl": "",
-  "changelogUrl": "",
-  "licensesUrl": "",
+  "name": "com.ez.network-activity-inspector",
+  "version": "1.0.0",
+  "displayName": "Network Activity Inspector",
+  "type": "tool",
   "dependencies": {
-  },
-  "keywords": [
-    "keyword1",
-    "keyword2",
-    "keyword3"
-  ],
-  "category": "Category",
-  "author": {
-    "name": "",
-    "email": "",
-    "url": ""
+    "com.unity.nuget.newtonsoft-json": "3.0.2"
   }
 }

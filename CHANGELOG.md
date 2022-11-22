@@ -7,5 +7,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2022-11-21
 ### Initial release
-- Added Pakcage 1.0.0
+- Added NetworkActivity Inspector 1.0.0
 - Added `package.json` and other basic files for Unity Package Manager
