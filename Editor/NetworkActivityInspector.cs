@@ -103,6 +103,8 @@ namespace EZ.Network.Editor
 
             NetworkActivity.webRequestRequested += OnRequest;
             NetworkActivity.webResponseReceived += OnReceived;
+
+            UpdateLogs();
         }
 
         private void OnRequest(PacketLog packetLog)
@@ -240,7 +242,7 @@ namespace EZ.Network.Editor
                     EditorGUILayout.LabelField("Request Method:", _selected.Method);
                     EditorGUILayout.LabelField("Status Code:", _selected.StatusCode.ToString());
 
-                    EditorGUILayout.LabelField("Result:", _selected.result.ToString());
+                    EditorGUILayout.LabelField("Result:", _selected.Result.ToString());
                     EditorGUILayout.LabelField("Http Error:", _selected.IsHttpError.ToString());
                     EditorGUILayout.LabelField("Network Error:", _selected.IsNetworkError.ToString());
                     EditorGUILayout.LabelField("Error:", _selected.Error);
