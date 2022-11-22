@@ -17,6 +17,10 @@ To install this package, you need to edit your Unity project's `Packages/manifes
 ## Usage
 
 ```CSharp
+using UnityEngine.Networking;
+...
+var req = UnityWebRequest.Post("http://helloworld.com");
 var operation = req.SendWebRequest();
 await EZ.Network.NetworkActivity.OnRequest(operation, request.Param);
+...
 ```
