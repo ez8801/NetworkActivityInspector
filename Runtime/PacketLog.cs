@@ -8,7 +8,9 @@ namespace EZ.Network
 {  
     internal class PacketLog
     {
-        private static long autoincrement = 0;
+        private static long s_autoincrement = 0;
+
+        internal static readonly PacketLog Default = new PacketLog();
 
         public string Url;
         public string Method;
@@ -50,7 +52,7 @@ namespace EZ.Network
             RequestPayload = arguments;
             ProtocolFlags = Protocol.Http;
             RequestHeaders.Add("Content-Type", request.GetRequestHeader("Content-Type"));
-            Id = ++autoincrement;
+            Id = ++s_autoincrement;
         }
 
         internal void OnResponse(UnityWebRequest request, string receivedText)

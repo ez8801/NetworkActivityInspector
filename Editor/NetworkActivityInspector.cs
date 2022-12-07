@@ -1,110 +1,117 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
+using UnityEngine.UIElements;
+using EZ.Network.Editor.View;
 using System.Linq;
-using System.Reflection;
-using System;
-using EZ.Json.Extensions;
 
 namespace EZ.Network.Editor
 {
-    public class NetworkActivityInspector : EditorWindow
+    public class NetworkActivityInspector : EditorWindow, MenuBar.IEventListener
     {
-        private static NetworkActivityInspector window = null;
-
-        private const float FOLD_WIDTH = 160f;
-
-        private Vector2 _scrollPositionLogs = Vector2.zero;
-        private Vector2 _scrollPositionDetails = Vector2.zero;
+        private static NetworkActivityInspector s_window = null;
 
         private int _prevCount;
         private float _realtimeSinceStartup;
 
-        private bool _isUpdateWhenChanged;
-        private bool _isScrollLock;
-        private bool _isClearOnStop;
-        private string _searchKeyword;
-
-        private bool _isFoldGeneral;
-        private bool _isFoldResponseHeaders;
-        private bool _isFoldRequestHeaders;
-        private bool _isFoldRequestPayload;
-        private bool _isFoldResponse;
-        private bool _isPretty;
-        private Protocol protocolFlags = Protocol.Everything;
-
         private bool _isDirty;
 
+        private List<PacketLog> _logs;
         private List<PacketLog> _filteredLogs;
-        private int logCount => _filteredLogs?.Count ?? 0;
-
+        
         private PacketLog _selected;
         private int _selectedIndex;
 
-        private GUIStyle _bufferContentStyle;
-        private GUIStyle _normalStyle;
-        private GUIStyle _selectedStyle;
-        private GUIStyle _buttonStyle;
-        private GUIStyle _dropDownStyle;
+        private MenuBar _menuBar;
+        private ListView _listView;
+        private LogDetailView _logDetailView;
+
+        public int LogCount => _filteredLogs?.Count ?? 0;
+
+        public class Model
+        {
+            public bool IsClearOnStop = false;
+            public bool IsPretty = true;
+            public bool IsUpdateWhenChanged = true;
+            public bool IsScrollLock = false;
+
+            public string SearchKeyword = "";
+
+            public Protocol ProtocolFlags = Protocol.Everything;
+        }
+
+        private Model _model = new Model();
 
         [MenuItem("Tools/Inspect Network Activity %F1", false, 1)]
         static public void Open()
         {
-            window = EditorWindow.GetWindow<NetworkActivityInspector>(false, "Network Activity Inspector", true);
-            if (window != null)
-                window.Initialize();
+            s_window = EditorWindow.GetWindow<NetworkActivityInspector>(false, "Network Activity Inspector", true);
+            if (s_window != null)
+                s_window.Initialize(s_window.rootVisualElement);
         }
 
-        private void Initialize()
+        private void Initialize(VisualElement rootVisualElement)
         {
-            _scrollPositionLogs = Vector2.zero;
-            _scrollPositionDetails = Vector2.zero;
-
-            _isUpdateWhenChanged = false;
-            _isScrollLock = false;
-            _isClearOnStop = false;
-            _searchKeyword = string.Empty;
-
             _prevCount = 0;
             _realtimeSinceStartup = Time.realtimeSinceStartup;
 
-            _isFoldGeneral = true;
-            _isFoldResponseHeaders = true;
-            _isFoldRequestHeaders = true;
-            _isFoldRequestPayload = true;
-            _isFoldResponse = true;
-
-            _selected = null;
+            _selected = PacketLog.Default;
             _selectedIndex = -1;
-
-            var style = EditorStyles.toolbarButton;
-
-            _normalStyle = new GUIStyle(style);
-            _normalStyle.alignment = TextAnchor.MiddleLeft;
-            _normalStyle.hover.textColor = Color.white;
-            _normalStyle.focused.textColor = Color.white;
-
-            _selectedStyle = new GUIStyle(style);
-            _selectedStyle.alignment = TextAnchor.MiddleLeft;
-            _selectedStyle.hover.textColor = Color.white;
-            _selectedStyle.focused.textColor = Color.white;
-
-            _buttonStyle = new GUIStyle(style);
-            _buttonStyle.alignment = TextAnchor.MiddleCenter;
-            _buttonStyle.fixedHeight = 56f;
-
-            _bufferContentStyle = new GUIStyle(EditorStyles.label);
-            _bufferContentStyle.richText = true;
-
-            _dropDownStyle = new GUIStyle("ToolbarDropDown");
-            _dropDownStyle.fixedWidth = 100f;
-
-            _isPretty = true;
 
             NetworkActivity.webRequestRequested += OnRequest;
             NetworkActivity.webResponseReceived += OnReceived;
 
             UpdateLogs();
+
+            _menuBar = new MenuBar(_model);
+            _menuBar.SetOnEventListener(this);
+            rootVisualElement.Add(_menuBar);
+
+            var splitView = new TwoPaneSplitView(0, 350, TwoPaneSplitViewOrientation.Horizontal);
+            rootVisualElement.Add(splitView);
+
+            var leftPane = new VisualElement();
+            _listView = new ListView();
+            _listView.makeItem = () => new Label();
+            _listView.itemsSource = _filteredLogs;
+            _listView.bindItem = (item, index) => {
+                if (!(index < 0 || index >= LogCount))
+                {
+                    var packetLog = _filteredLogs[index] as PacketLog;
+                    (item as Label).text = packetLog.Url;
+                }                
+            };
+            _listView.unbindItem = (item, index) =>
+            {
+                (item as Label).text = string.Empty;
+            };
+            _listView.destroyItem = (item) =>
+            {
+                
+            };
+            _listView.onSelectedIndicesChange += (e) =>
+            {
+                var selectedId = e.FirstOrDefault();
+                if (selectedId < 0 || selectedId >= LogCount)
+                {
+                    _selected = PacketLog.Default;
+                    _selectedIndex = -1;
+                }
+                else
+                {
+                    _selected = _filteredLogs[selectedId] as PacketLog;
+                    _selectedIndex = selectedId;
+                }
+                _logDetailView.SetSelected(_selected);
+                //_logDetailView.MarkDirtyRepaint();
+            };
+            leftPane.Add(_listView);
+            splitView.Add(leftPane);
+
+            var rightPane = new VisualElement();
+            _logDetailView = new LogDetailView(() => _model.IsPretty);
+            rightPane.Add(_logDetailView);
+            splitView.Add(rightPane);
         }
 
         private void OnRequest(PacketLog packetLog)
@@ -117,60 +124,9 @@ namespace EZ.Network.Editor
             _isDirty = true;
         }
 
-        private void DrawMenuBar()
+        private void Reload()
         {
-            GUILayout.BeginHorizontal();
-
-            if (GUILayout.Button("Clear", EditorStyles.toolbarButton, GUILayout.MaxWidth(82f)))
-                Clear();
-
-            if (GUILayout.Button("Fold", EditorStyles.toolbarButton, GUILayout.MaxWidth(82f)))
-            {
-                if (_isFoldGeneral
-                    || _isFoldRequestHeaders
-                    || _isFoldResponseHeaders
-                    || _isFoldRequestPayload
-                    || _isFoldResponse)
-                {
-                    _isFoldGeneral = false;
-                    _isFoldRequestHeaders = false;
-                    _isFoldResponseHeaders = false;
-                    _isFoldRequestPayload = false;
-                    _isFoldResponse = false;
-                }
-                else
-                {
-                    _isFoldGeneral = true;
-                    _isFoldRequestHeaders = true;
-                    _isFoldResponseHeaders = true;
-                    _isFoldRequestPayload = true;
-                    _isFoldResponse = true;
-                }
-            }
-
-            _isClearOnStop = GUILayout.Toggle(_isClearOnStop, "Clear on Stop", EditorStyles.toolbarButton, GUILayout.MaxWidth(116f));
-            _isPretty = GUILayout.Toggle(_isPretty, "Pretty", EditorStyles.toolbarButton);
-
-            var changedProtocolFlags = (Protocol)EditorGUILayout.EnumFlagsField(protocolFlags, _dropDownStyle);
-
-            if (protocolFlags != changedProtocolFlags)
-            {
-                protocolFlags = changedProtocolFlags;
-                OnProtocolFlagChanged();
-            }
-
-            var searchKeyWord = EditorGUILayout.TextField(_searchKeyword, EditorStyles.toolbarSearchField);
-
-            if (searchKeyWord != _searchKeyword)
-            {
-                _searchKeyword = searchKeyWord;
-                OnSearchingKeywordChanged();
-            }
-
-            _isUpdateWhenChanged = GUILayout.Toggle(_isUpdateWhenChanged, "Update When Changed", EditorStyles.toolbarButton, GUILayout.MaxWidth(146f));
-            _isScrollLock = GUILayout.Toggle(_isScrollLock, "Scroll Lock", EditorStyles.toolbarButton, GUILayout.MaxWidth(100f));
-
-            GUILayout.EndHorizontal();
+            rootVisualElement.MarkDirtyRepaint();
         }
 
         private bool ProcessKeyEvent(Event current)
@@ -184,12 +140,14 @@ namespace EZ.Network.Editor
                         case KeyCode.UpArrow:
                             _selectedIndex = Mathf.Max(--_selectedIndex, 0);
                             _selected = _filteredLogs[_selectedIndex];
-                            Repaint();
+                            _logDetailView?.SetSelected(_selected);
+                            Reload();
                             return true;
                         case KeyCode.DownArrow:
-                            _selectedIndex = Mathf.Min(++_selectedIndex, logCount - 1);
+                            _selectedIndex = Mathf.Min(++_selectedIndex, LogCount - 1);
                             _selected = _filteredLogs[_selectedIndex];
-                            Repaint();
+                            _logDetailView?.SetSelected(_selected);
+                            Reload();
                             return true;
                     }
                 }
@@ -200,176 +158,9 @@ namespace EZ.Network.Editor
         private void OnGUI()
         {
             var isProcessed = ProcessKeyEvent(Event.current);
-
             if (isProcessed)
                 return;
 
-            DrawMenuBar();
-
-            EditorGUILayout.BeginHorizontal();
-            {
-                var hasSelected = (_selected != null);
-
-                EditorGUILayout.BeginVertical(GUILayout.Width(300));
-                {
-                    if (logCount > 0)
-                        DrawLogs();
-                }
-                EditorGUILayout.EndVertical();
-
-                if (hasSelected)
-                    DrawDetails();
-            }
-            EditorGUILayout.EndHorizontal();
-        }
-
-        private string GetFoldHeader(string headerName, bool isFold)
-        {
-            return string.Format("{0} {1}", (isFold) ? "▼" : "▶", headerName);
-        }
-
-        private void DrawDetails()
-        {
-            EditorGUILayout.BeginVertical();
-
-            _scrollPositionDetails = EditorGUILayout.BeginScrollView(_scrollPositionDetails);
-            {
-                _isFoldGeneral = GUILayout.Toggle(_isFoldGeneral, GetFoldHeader("General", _isFoldGeneral), EditorStyles.toolbarButton, GUILayout.ExpandWidth(true));
-
-                if (_isFoldGeneral)
-                {
-                    EditorGUILayout.LabelField("Request URL:", _selected.Url);
-                    EditorGUILayout.LabelField("Request Method:", _selected.Method);
-                    EditorGUILayout.LabelField("Status Code:", _selected.StatusCode.ToString());
-
-                    EditorGUILayout.LabelField("Result:", _selected.Result.ToString());
-                    EditorGUILayout.LabelField("Http Error:", _selected.IsHttpError.ToString());
-                    EditorGUILayout.LabelField("Network Error:", _selected.IsNetworkError.ToString());
-                    EditorGUILayout.LabelField("Error:", _selected.Error);
-                }
-
-                _isFoldResponseHeaders = GUILayout.Toggle(_isFoldResponseHeaders, GetFoldHeader("Response Headers", _isFoldResponseHeaders), EditorStyles.toolbarButton, GUILayout.ExpandWidth(true));
-
-                if (_isFoldResponseHeaders)
-                {
-                    if (!(_selected.ResponseHeaders == null || _selected.ResponseHeaders.Count == 0))
-                    {
-                        var enumerator = _selected.ResponseHeaders.GetEnumerator();
-
-                        while (enumerator.MoveNext())
-                        {
-                            EditorGUILayout.LabelField(enumerator.Current.Key, enumerator.Current.Value);
-                        }
-                    }
-                }
-
-                _isFoldRequestHeaders = GUILayout.Toggle(_isFoldRequestHeaders, GetFoldHeader("Request Headers", _isFoldRequestHeaders), EditorStyles.toolbarButton, GUILayout.ExpandWidth(true));
-
-                if (_isFoldRequestHeaders)
-                {
-                    var contentType = string.Empty;
-                    _selected.RequestHeaders.TryGetValue("Content-Type", out contentType);
-                    EditorGUILayout.LabelField("Content-Type:", contentType);
-                }
-
-                GUILayout.BeginHorizontal();
-
-                _isFoldRequestPayload = GUILayout.Toggle(_isFoldRequestPayload, GetFoldHeader("Request Payload", _isFoldRequestPayload), EditorStyles.toolbarButton, GUILayout.Width(FOLD_WIDTH));
-
-                if (GUILayout.Button("Copy", EditorStyles.toolbarButton, GUILayout.ExpandWidth(true)))
-                {
-                    EditorGUIUtility.systemCopyBuffer = GetSelectedContent(_selected, _selected.RequestPayload);
-                }
-
-                GUILayout.EndHorizontal();
-
-                if (_isFoldRequestPayload)
-                {
-                    GUILayout.Label(GetSelectedContent(_selected, _selected.RequestPayload), _bufferContentStyle);
-                }
-
-                GUILayout.BeginHorizontal();
-                _isFoldResponse = GUILayout.Toggle(_isFoldResponse, GetFoldHeader("Response", _isFoldResponse), EditorStyles.toolbarButton, GUILayout.Width(FOLD_WIDTH));
-
-                if (GUILayout.Button("Copy", EditorStyles.toolbarButton, GUILayout.ExpandWidth(true)))
-                {
-                    EditorGUIUtility.systemCopyBuffer = GetSelectedContent(_selected, _selected.Response);
-                }
-
-                GUILayout.EndHorizontal();
-
-                if (_isFoldResponse)
-                {
-                    GUILayout.Label(GetSelectedContent(_selected, _selected.Response), _bufferContentStyle);
-                }
-
-                if (GUILayout.Button("Copy Packet", _buttonStyle))
-                {
-                    EditorGUIUtility.systemCopyBuffer = _selected.ToString();
-                }
-            }
-            EditorGUILayout.EndScrollView();
-            EditorGUILayout.EndVertical();
-        }
-
-        private string GetSelectedContent(PacketLog selected, string content)
-        {
-            try
-            {
-                if (!_isPretty)
-                    return content;
-
-                var prettyFallback = content.ToPrettyJSONify();
-                return prettyFallback;                
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private void DrawLogs()
-        {
-            _scrollPositionLogs = EditorGUILayout.BeginScrollView(_scrollPositionLogs);
-
-            for (var i = 0; i < logCount; i++)
-            {
-                var packetLog = _filteredLogs[i];
-
-                if (string.IsNullOrEmpty(_searchKeyword) == false)
-                {
-                    var isContains = packetLog.Url.Contains(_searchKeyword);
-
-                    if (isContains == false)
-                    {
-                        if (!string.IsNullOrEmpty(packetLog.RequestPayload))
-                            isContains = packetLog.RequestPayload.Contains(_searchKeyword);
-                    }
-                    if (isContains == false)
-                    {
-                        if (!string.IsNullOrEmpty(packetLog.Response))
-                            isContains = packetLog.Response.Contains(_searchKeyword);
-                    }
-                    if (isContains == false)
-                    {
-                        continue;
-                    }
-                }
-
-                var isSelected = (_selectedIndex == i);
-
-                GUILayout.BeginHorizontal();
-
-                if (GUILayout.Button($"{packetLog.Url}", isSelected ? _selectedStyle : _normalStyle))
-                {
-                    _selected = packetLog;
-                    _selectedIndex = i;
-                }
-
-                GUILayout.EndHorizontal();
-            }
-
-            EditorGUILayout.EndScrollView();
         }
 
         private void Update()
@@ -387,50 +178,85 @@ namespace EZ.Network.Editor
                     return;
                 }
 
-                _prevCount = logCount;
+                _prevCount = LogCount;
                 _realtimeSinceStartup = Time.realtimeSinceStartup;
 
                 _isDirty = false;
 
-                if (_isUpdateWhenChanged)
+                if (_model.IsUpdateWhenChanged)
                 {
-                    if (_isScrollLock == false)
+                    if (_model.IsScrollLock == false)
                     {
-                        _scrollPositionLogs = new Vector2(_scrollPositionLogs.x, Mathf.Infinity);
+                        var logCount = LogCount;
+                        if (logCount > 0)
+                            _listView.ScrollToItem(logCount - 1);
                     }
 
-                    Repaint();
+                    Reload();
                 }
             }
         }
 
-        private void OnSearchingKeywordChanged()
+        private bool IsValid(PacketLog packetLog)
         {
-            // TODO : Implementation
-        }
+            var isContains = packetLog.Url.Contains(_model.SearchKeyword);
+            if (isContains == false)
+            {
+                if (!string.IsNullOrEmpty(packetLog.RequestPayload))
+                    isContains = packetLog.RequestPayload.Contains(_model.SearchKeyword);
+            }
 
-        private void OnProtocolFlagChanged()
-        {
-            UpdateLogs();
+            if (isContains == false)
+            {
+                if (!string.IsNullOrEmpty(packetLog.Response))
+                    isContains = packetLog.Response.Contains(_model.SearchKeyword);
+            }
+            return isContains;
         }
 
         private void UpdateLogs()
         {
-            _filteredLogs = NetworkActivityLogger.Filter(protocolFlags);            
+            _logs = NetworkActivityLogger.Filter(_model.ProtocolFlags);
+            if (_filteredLogs == null)
+                _filteredLogs = new List<PacketLog>();
+
+            if (!(_logs == null || _logs.Count == 0))
+            {
+                if (string.IsNullOrEmpty(_model.SearchKeyword))
+                {
+                    _filteredLogs.Clear();
+                    _filteredLogs.AddRange(_logs);
+                }
+                else
+                    _filteredLogs = _logs.FindAll(IsValid);                
+            }
+            else
+            {
+                _filteredLogs.Clear();
+            }
         }
 
         private void OnPlayModeStateChanged(PlayModeStateChange playModeState)
         {
-            if (_isClearOnStop)
+            if (playModeState == PlayModeStateChange.ExitingPlayMode)
             {
-                if (playModeState == PlayModeStateChange.ExitingPlayMode)
+                if (_model.IsClearOnStop)
+                {
                     Clear();
-            }
+                }
 
+                rootVisualElement.MarkDirtyRepaint();
+            }
+            
             if (playModeState == PlayModeStateChange.EnteredPlayMode)
             {
                 UpdateLogs();
             }
+        }
+
+        private void Fold()
+        {
+            _logDetailView.Fold();            
         }
 
         private void Clear()
@@ -445,12 +271,12 @@ namespace EZ.Network.Editor
 
         private void Awake()
         {
-            window = this;
+            s_window = this;
         }
 
         private void OnDisable()
         {
-            if (_isClearOnStop)
+            if (_model.IsClearOnStop)
             {
                 Clear();
             }
@@ -464,5 +290,29 @@ namespace EZ.Network.Editor
         }
 
         #endregion Callbacks
+
+        void MenuBar.IEventListener.OnClear()
+        {
+            Clear();
+        }
+
+        void MenuBar.IEventListener.OnFold()
+        {
+            Fold();
+        }
+
+        void MenuBar.IEventListener.OnProtocolFlagChanged()
+        {
+            UpdateLogs();
+            _listView.RefreshItems();
+            Reload();
+        }
+
+        void MenuBar.IEventListener.OnSearchingKeywordChanged(string keyword)
+        {
+            UpdateLogs();
+            _listView.RefreshItems();
+            Reload();
+        }
     }
 }
