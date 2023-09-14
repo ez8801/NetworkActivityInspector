@@ -18,6 +18,7 @@ namespace EZ.Network.Editor.View
         private bool _isFoldResponse = true;
 
         private GUIStyle _buttonStyle;
+        private GUIStyle _toolbarButtonStyle;
         private GUIStyle _bufferContentStyle;
 
         private System.Func<bool> _pretty;
@@ -32,6 +33,8 @@ namespace EZ.Network.Editor.View
             _bufferContentStyle = new GUIStyle(EditorStyles.label);
             _bufferContentStyle.richText = true;
 
+            _toolbarButtonStyle = new GUIStyle(EditorStyles.toolbarButton);
+            
             var style = EditorStyles.toolbarButton;
             _buttonStyle = new GUIStyle(style);
             _buttonStyle.alignment = TextAnchor.MiddleCenter;
@@ -121,6 +124,18 @@ namespace EZ.Network.Editor.View
                         {
                             EditorGUILayout.LabelField(enumerator.Current.Key, enumerator.Current.Value);
                         }
+
+                        if (GUILayout.Button("Copy Response Headers", 
+                            _toolbarButtonStyle, 
+                            GUILayout.ExpandWidth(true)))
+                        {
+                            var builder = new System.Text.StringBuilder();
+                            foreach (var header in _selected.ResponseHeaders)
+                            {
+                                builder.AppendLine($"{header.Key} : {header.Value}");
+                            }
+                            EditorGUIUtility.systemCopyBuffer = builder.ToString();
+                        }
                     }
                 }
 
@@ -136,17 +151,22 @@ namespace EZ.Network.Editor.View
                 }
 
                 GUILayout.BeginHorizontal();
-
-                _isFoldRequestPayload = GUILayout.Toggle(_isFoldRequestPayload,
-                    GetFoldHeader("Request Payload", _isFoldRequestPayload),
-                    EditorStyles.toolbarButton,
-                    GUILayout.Width(FOLD_WIDTH));
-
-                if (GUILayout.Button("Copy", EditorStyles.toolbarButton, GUILayout.ExpandWidth(true)))
                 {
-                    EditorGUIUtility.systemCopyBuffer = GetSelectedContent(_selected.RequestPayload);
-                }
+                    _isFoldRequestPayload = GUILayout.Toggle(_isFoldRequestPayload,
+                        GetFoldHeader("Request Payload", _isFoldRequestPayload),
+                        EditorStyles.toolbarButton,
+                        GUILayout.Width(FOLD_WIDTH));
 
+                    if (GUILayout.Button("Copy", 
+                        _toolbarButtonStyle, 
+                        GUILayout.ExpandWidth(true),
+                        GUILayout.MinWidth(128f)))
+                    {
+                        EditorGUIUtility.systemCopyBuffer = GetSelectedContent(_selected.RequestPayload);
+                    }
+
+                    GUILayout.FlexibleSpace();
+                }
                 GUILayout.EndHorizontal();
 
                 if (_isFoldRequestPayload)
@@ -155,15 +175,21 @@ namespace EZ.Network.Editor.View
                 }
 
                 GUILayout.BeginHorizontal();
-                _isFoldResponse = GUILayout.Toggle(_isFoldResponse, GetFoldHeader("Response", _isFoldResponse),
-                    EditorStyles.toolbarButton,
-                    GUILayout.Width(FOLD_WIDTH));
-
-                if (GUILayout.Button("Copy", EditorStyles.toolbarButton, GUILayout.ExpandWidth(true)))
                 {
-                    EditorGUIUtility.systemCopyBuffer = GetSelectedContent(_selected.Response);
-                }
+                    _isFoldResponse = GUILayout.Toggle(_isFoldResponse, GetFoldHeader("Response", _isFoldResponse),
+                        EditorStyles.toolbarButton,
+                        GUILayout.Width(FOLD_WIDTH));
 
+                    if (GUILayout.Button("Copy", 
+                        _toolbarButtonStyle, 
+                        GUILayout.ExpandWidth(true),
+                        GUILayout.MinWidth(128f)))
+                    {
+                        EditorGUIUtility.systemCopyBuffer = GetSelectedContent(_selected.Response);
+                    }
+
+                    GUILayout.FlexibleSpace();
+                }
                 GUILayout.EndHorizontal();
 
                 if (_isFoldResponse)

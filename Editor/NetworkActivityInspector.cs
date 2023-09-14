@@ -45,9 +45,18 @@ namespace EZ.Network.Editor
         [MenuItem("Tools/Inspect Network Activity %F1", false, 1)]
         static public void Open()
         {
-            s_window = EditorWindow.GetWindow<NetworkActivityInspector>(false, "Network Activity Inspector", true);
-            if (s_window != null)
-                s_window.Initialize(s_window.rootVisualElement);
+            if (s_window == null)
+            {
+                s_window = EditorWindow.GetWindow<NetworkActivityInspector>(false, "Network Activity Inspector", true);
+                if (s_window != null)
+                    s_window.Initialize(s_window.rootVisualElement);
+            }
+        }
+
+        [UnityEngine.RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterAssembliesLoaded)]
+        public static void RegistCallback()
+        {
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
         }
 
         private void Initialize(VisualElement rootVisualElement)
@@ -103,7 +112,6 @@ namespace EZ.Network.Editor
                     _selectedIndex = selectedId;
                 }
                 _logDetailView.SetSelected(_selected);
-                //_logDetailView.MarkDirtyRepaint();
             };
             leftPane.Add(_listView);
             splitView.Add(leftPane);
@@ -126,7 +134,9 @@ namespace EZ.Network.Editor
 
         private void Reload()
         {
+            _listView.RefreshItems();
             rootVisualElement.MarkDirtyRepaint();
+            Repaint();
         }
 
         private bool ProcessKeyEvent(Event current)
@@ -161,6 +171,8 @@ namespace EZ.Network.Editor
             if (isProcessed)
                 return;
 
+            if (s_window == null)
+                Open();
         }
 
         private void Update()
@@ -236,21 +248,21 @@ namespace EZ.Network.Editor
             }
         }
 
-        private void OnPlayModeStateChanged(PlayModeStateChange playModeState)
+        private void OnExitPlayMode()
+        {
+            if (_model.IsClearOnStop)
+            {
+                Clear();
+                Reload();
+            }
+        }
+
+        private static void OnPlayModeStateChanged(PlayModeStateChange playModeState)
         {
             if (playModeState == PlayModeStateChange.ExitingPlayMode)
             {
-                if (_model.IsClearOnStop)
-                {
-                    Clear();
-                }
-
-                rootVisualElement.MarkDirtyRepaint();
-            }
-            
-            if (playModeState == PlayModeStateChange.EnteredPlayMode)
-            {
-                UpdateLogs();
+                if (s_window != null)
+                    s_window.OnExitPlayMode();
             }
         }
 
@@ -280,13 +292,11 @@ namespace EZ.Network.Editor
             {
                 Clear();
             }
-
-            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
         }
 
         private void OnEnable()
         {
-            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            
         }
 
         #endregion Callbacks
@@ -304,14 +314,12 @@ namespace EZ.Network.Editor
         void MenuBar.IEventListener.OnProtocolFlagChanged()
         {
             UpdateLogs();
-            _listView.RefreshItems();
             Reload();
         }
 
         void MenuBar.IEventListener.OnSearchingKeywordChanged(string keyword)
         {
             UpdateLogs();
-            _listView.RefreshItems();
             Reload();
         }
     }

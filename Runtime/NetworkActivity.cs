@@ -31,10 +31,14 @@ namespace EZ.Network
                 var webRequest = operation.webRequest;
                 var packetLog = new PacketLog(webRequest, arguments);
                 webRequestRequested?.Invoke(packetLog);
-                await operation;
-                packetLog.OnResponse(operation.webRequest, webRequest.downloadHandler.text);
+                if (!webRequest.isDone)                    
+                    await operation;
+
+                string downloadText = webRequest.downloadHandler?.text ?? string.Empty;
+                packetLog.OnResponse(operation.webRequest, downloadText);
                 webResponseReceived?.Invoke();
             }
+            await Task.Yield();
         }
     }
 }
